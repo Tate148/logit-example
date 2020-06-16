@@ -1,0 +1,212 @@
+library(aod)
+library(ggplot2)
+library(readr)
+binary<-read_csv("binary.csv")
+Parsed with column specification:
+cols(
+  admit = col_double(),
+  gre = col_double(),
+  gpa = col_double(),
+  rank = col_double()
+)
+binary<-as.data.frame(binary)
+head(binary, 25)
+   admit gre  gpa rank
+1      0 380 3.61    3
+2      1 660 3.67    3
+3      1 800 4.00    1
+4      1 640 3.19    4
+5      0 520 2.93    4
+6      1 760 3.00    2
+7      1 560 2.98    1
+8      0 400 3.08    2
+9      1 540 3.39    3
+10     0 700 3.92    2
+11     0 800 4.00    4
+12     0 440 3.22    1
+13     1 760 4.00    1
+14     0 700 3.08    2
+15     1 700 4.00    1
+16     0 480 3.44    3
+17     0 780 3.87    4
+18     0 360 2.56    3
+19     0 800 3.75    2
+20     1 540 3.81    1
+21     0 500 3.17    3
+22     1 660 3.63    2
+23     0 600 2.82    4
+24     0 680 3.19    4
+25     1 760 3.35    2
+#summarize variables
+binary<-na.omit(binary)
+summary(binary)
+     admit             gre             gpa             rank      
+ Min.   :0.0000   Min.   :220.0   Min.   :2.260   Min.   :1.000  
+ 1st Qu.:0.0000   1st Qu.:520.0   1st Qu.:3.130   1st Qu.:2.000  
+ Median :0.0000   Median :580.0   Median :3.395   Median :2.000  
+ Mean   :0.3175   Mean   :587.7   Mean   :3.390   Mean   :2.485  
+ 3rd Qu.:1.0000   3rd Qu.:660.0   3rd Qu.:3.670   3rd Qu.:3.000  
+ Max.   :1.0000   Max.   :800.0   Max.   :4.000   Max.   :4.000  
+sapply(binary, sd)
+      admit         gre         gpa        rank 
+  0.4660867 115.5165364   0.3805668   0.9444602 
+## two-way contingency table of categorical outcome and predictors we want
+## to make sure there are not 0 cells
+xtabs(~admit + rank, data = binary)
+     rank
+admit  1  2  3  4
+    0 28 97 93 55
+    1 33 54 28 12
+#using logit model
+binary$rank <- factor(binary$rank)
+mylogit <- glm(admit ~ gre + gpa + rank, data = binary, family = "binomial")
+summary(mylogit)
+
+Call:
+glm(formula = admit ~ gre + gpa + rank, family = "binomial", 
+    data = binary)
+
+Deviance Residuals: 
+    Min       1Q   Median       3Q      Max  
+-1.6268  -0.8662  -0.6388   1.1490   2.0790  
+
+Coefficients:
+             Estimate Std. Error z value Pr(>|z|)    
+(Intercept) -3.989979   1.139951  -3.500 0.000465 ***
+gre          0.002264   0.001094   2.070 0.038465 *  
+gpa          0.804038   0.331819   2.423 0.015388 *  
+rank2       -0.675443   0.316490  -2.134 0.032829 *  
+rank3       -1.340204   0.345306  -3.881 0.000104 ***
+rank4       -1.551464   0.417832  -3.713 0.000205 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 499.98  on 399  degrees of freedom
+Residual deviance: 458.52  on 394  degrees of freedom
+AIC: 470.52
+
+Number of Fisher Scoring iterations: 4
+
+# For every one unit change in gre, the
+# log odds of admission (versus non-admission) increases by 0.002.
+# For a one unit increase in gpa, the log odds of being admitted to
+# graduate school increases by 0.804.
+# having attended an undergraduate institution with rank of 2,
+# versus an institution with a rank of 1, changes the log odds of
+# admission by -0.675.
+## Confidence intervals using profiled log-likelihood
+confint(mylogit)
+Waiting for profiling to be done...
+                    2.5 %       97.5 %
+(Intercept) -6.2716202334 -1.792547080
+gre          0.0001375921  0.004435874
+gpa          0.1602959439  1.464142727
+rank2       -1.3008888002 -0.056745722
+rank3       -2.0276713127 -0.670372346
+rank4       -2.4000265384 -0.753542605
+> ## CIs using standard errors
+> confint.default(mylogit)
+                    2.5 %       97.5 %
+(Intercept) -6.2242418514 -1.755716295
+gre          0.0001202298  0.004408622
+gpa          0.1536836760  1.454391423
+rank2       -1.2957512650 -0.055134591
+rank3       -2.0169920597 -0.663415773
+rank4       -2.3703986294 -0.732528724
+#Can test for an overall effect of rank using the wald.test function 
+#of the aod library. The order in which the coefficients are given in the table
+#of coefficients is the same as the order of the terms in the model. 
+#the wald.test function. b supplies the coefficients, 
+#while Sigma supplies the variance covariance matrix of the error terms, 
+#Terms tells R which terms in the model are to be tested, 
+#in this case, terms 4, 5, and 6, are the three terms for the levels of rank
+#as seen above in the confint.default(mylogit)
+wald.test(b = coef(mylogit), Sigma = vcov(mylogit), Terms = 4:6)
+Wald test:
+----------
+
+Chi-squared test:
+X2 = 20.9, df = 3, P(> X2) = 0.00011
+#The chi-squared test statistic of 20.9, with three degrees of freedom 
+#is associated with a p-value of 0.00011 indicating that the overall 
+#effect of rank is statistically significant.
+## odds ratios and 95% CI
+exp(cbind(OR = coef(mylogit), confint(mylogit)))
+Waiting for profiling to be done...
+                   OR       2.5 %    97.5 %
+(Intercept) 0.0185001 0.001889165 0.1665354
+gre         1.0022670 1.000137602 1.0044457
+gpa         2.2345448 1.173858216 4.3238349
+rank2       0.5089310 0.272289674 0.9448343
+rank3       0.2617923 0.131641717 0.5115181
+rank4       0.2119375 0.090715546 0.4706961
+#For a one unit increase in gpa, 
+#the odds of being admitted to graduate school 
+#(versus not being admitted) increase by a factor of 2.235.
+
+#calculating the predicted probability of admission at each value of rank, 
+#holding gre and gpa at their means. First we create and view the data frame.
+newbinary1 <- with(binary, data.frame(gre = mean(gre), gpa = mean(gpa), 
++                                       rank = factor(1:4)))
+## view data frame
+newbinary1
+    gre    gpa rank
+1 587.7 3.3899    1
+2 587.7 3.3899    2
+3 587.7 3.3899    3
+4 587.7 3.3899    4
+# The newdata1$rankP tells R that we want to create a new variable in the dataset
+# (data frame) newdata1 called rankP, the rest of the command tells R that the
+# values of rankP should be predictions made using the predict( ) function. 
+# The options within the parentheses tell R that the predictions should be
+# based on the analysis mylogit with values of the predictor variables coming 
+# from newdata1 and that the type of prediction is a predicted probability
+# (type="response"). 
+
+newbinary1$rankP <- predict(mylogit, newdata = newbinary1, type = "response")
+newbinary1
+    gre    gpa rank     rankP
+1 587.7 3.3899    1 0.5166016
+2 587.7 3.3899    2 0.3522846
+3 587.7 3.3899    3 0.2186120
+4 587.7 3.3899    4 0.1846684
+newbinary2 <- with(binary, data.frame(gre = rep(seq(from = 200, to = 800, 
++                                                     length.out = 100),
++                                               4), gpa = mean(gpa), 
++                                       rank = factor(rep(1:4, each = 100))))
+newbinary3 <- cbind(newbinary2, predict(mylogit, newbinary = newbinary2, 
++                                         type = "link",
++                                     se = TRUE))
+newbinary3 <- within(newbinary3, {
++   PredictedProb <- plogis(fit)
++   LL <- plogis(fit - (1.96 * se.fit))
++   UL <- plogis(fit + (1.96 * se.fit))
++ })
+head(newbinary3)
+       gre    gpa rank        fit    se.fit residual.scale        UL         LL PredictedProb
+1 200.0000 3.3899    1 -1.5671256 0.3359675              1 0.2872804 0.09747311     0.1726265
+2 206.0606 3.3899    1 -0.8848442 0.2297198              1 0.3930300 0.20831785     0.2921750
+3 212.1212 3.3899    1  1.0377118 0.3480671              1 0.8481189 0.58795075     0.7384082
+4 218.1818 3.3899    1 -1.5273305 0.3373684              1 0.2960689 0.10078138     0.1783846
+5 224.2424 3.3899    1 -2.0081113 0.3552036              1 0.2121670 0.06271949     0.1183539
+6 230.3030 3.3899    1 -0.5323458 0.3023582              1 0.5150645 0.24509097     0.3699699
+#showing predicted probabilities
+
+ggplot(newbinary3, aes(x = gre, y = PredictedProb)) + geom_ribbon(aes(ymin = LL,
++                                                                     ymax = UL, fill = rank), alpha = 0.2) + geom_line(aes(colour = rank),
++  size = 1)
+with(mylogit, null.deviance - deviance)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+[1] 41.45903
+#degrees freedom
+with(mylogit, df.null - df.residual)
+[1] 5
+#p-value
+with(mylogit, pchisq(null.deviance - deviance, df.null - df.residual, 
++                      lower.tail = FALSE))
+[1] 7.578194e-08
+options(scipen=100)
+with(mylogit, pchisq(null.deviance - deviance, df.null - df.residual, 
++                      lower.tail = FALSE))
+[1] 0.00000007578194
